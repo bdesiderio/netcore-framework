@@ -6,6 +6,7 @@ namespace Framework.Authentication.ServiceContracts
 {
     public interface ISessionPersistanceService
     {
-        Task<object> PersistSession(IApplicationUser applicationUser, IEnumerable<string> roles);
+        Task<IPersistSessionClientResponse> PersistSession(IApplicationUser applicationUser, IEnumerable<string> roles);
+        Task<IUserSession> GetSessionPersistance();
     }
 }
