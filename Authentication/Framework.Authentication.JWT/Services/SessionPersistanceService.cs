@@ -15,22 +15,19 @@ using System.Threading.Tasks;
 
 namespace Framework.Authentication.JWT.Services
 {
-    public class JWTSessionPersistanceService : ISessionPersistanceService
+    public abstract class JWTSessionPersistanceService<TApplicationUserKey> : ISessionPersistanceService<TApplicationUserKey>
     {
         private readonly IOptions<JwtConfiguration> _jwtConfiguration;
-        private readonly IIdTypeFactory _idTypeFactory;
         private readonly IHttpContextAccessor _httpContextAccessor;
 
         public JWTSessionPersistanceService(IOptions<JwtConfiguration> jwtConfiguration,
-            IIdTypeFactory idTypeFactory,
             IHttpContextAccessor httpContextAccessor)
         {
             _jwtConfiguration = jwtConfiguration;
-            _idTypeFactory = idTypeFactory;
             _httpContextAccessor = httpContextAccessor;
         }
 
-        public async Task<IUserSession> GetSessionPersistance()
+        public async Task<IUserSession<TApplicationUserKey>> GetSessionPersistance()
         {
             var claimsPrincipal = _httpContextAccessor.HttpContext.User;
 
@@ -49,15 +46,23 @@ namespace Framework.Authentication.JWT.Services
                 throw new AuthenticationException("Cannot invoke GetSessionPersistance because Claims is empty or undefined");
             }
 
-            return await Task.FromResult(new SessionUser
-            {
-                Id = await _idTypeFactory.GetIdType(claimsPrincipal.Claims.FirstOrDefault(x => String.Equals(x.Type, ClaimTypes.NameIdentifier, StringComparison.OrdinalIgnoreCase)).Value),
-                UserName = claimsPrincipal.Claims.FirstOrDefault(x => String.Equals(x.Type, ClaimTypes.Name, StringComparison.OrdinalIgnoreCase)).Value,
-                Roles = claimsPrincipal.Claims.Where(x => String.Equals(x.Type, ClaimTypes.Role, StringComparison.OrdinalIgnoreCase)).Select(x => x.Value).ToList(),
-            });
+            var sessionUser = new SessionUser<TApplicationUserKey>();
+
+            sessionUser.Id = GetIdFromClaim(claimsPrincipal.Claims.FirstOrDefault(x => String.Equals(x.Type, ClaimTypes.NameIdentifier, StringComparison.OrdinalIgnoreCase)).Value);
+            sessionUser.UserName = claimsPrincipal.Claims.FirstOrDefault(x => String.Equals(x.Type, ClaimTypes.Name, StringComparison.OrdinalIgnoreCase)).Value;
+            sessionUser.Roles = claimsPrincipal.Claims.Where(x => String.Equals(x.Type, ClaimTypes.Role, StringComparison.OrdinalIgnoreCase)).Select(x => x.Value).ToList();
+
+            await MapClaimToSessionUser(claimsPrincipal.Claims, sessionUser);
+
+            return await Task.FromResult(sessionUser);
         }
 
-        public async Task<IPersistSessionClientResponse> PersistSession(IApplicationUser applicationUser, IEnumerable<string> roles)
+        public abstract TApplicationUserKey GetIdFromClaim(string claimId);
+
+        public virtual async Task MapClaimToSessionUser(IEnumerable<Claim> claims, SessionUser<TApplicationUserKey> sessionUser)
+            => await Task.CompletedTask;
+
+        public async Task<IPersistSessionClientResponse> PersistSession(IApplicationUser<TApplicationUserKey> applicationUser, IEnumerable<string> roles)
         {
             var authClaims = new List<Claim>
                 {

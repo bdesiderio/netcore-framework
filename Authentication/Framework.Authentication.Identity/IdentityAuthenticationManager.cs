@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 
 namespace Framework.Authentication.Identity
 {
-    public abstract class IdentityAuthenticationManager<TApplicationUser, TApplicationUserKey, TIdentityRole, TIdentityRoleKey> : IAuthenticationManager
-        where TApplicationUser : IdentityUser<TApplicationUserKey>, IApplicationUser
+    public abstract class IdentityAuthenticationManager<TApplicationUser, TApplicationUserKey, TIdentityRole, TIdentityRoleKey> : IAuthenticationManager<TApplicationUserKey>
+        where TApplicationUser : IdentityUser<TApplicationUserKey>, IApplicationUser<TApplicationUserKey>
         where TIdentityRole : IdentityRole<TIdentityRoleKey>
         where TIdentityRoleKey : IEquatable<TIdentityRoleKey>
         where TApplicationUserKey : IEquatable<TApplicationUserKey>
@@ -22,7 +22,7 @@ namespace Framework.Authentication.Identity
             RoleManager = roleManager;
         }
 
-        public async Task<IApplicationUser> CheckLoginAndGetUser(string username, string password)
+        public async Task<IApplicationUser<TApplicationUserKey>> CheckLoginAndGetUser(string username, string password)
         {
             var user = await UserManager.FindByNameAsync(username);
 
@@ -38,7 +38,7 @@ namespace Framework.Authentication.Identity
         protected virtual Task<TApplicationUser> MapApplicationUserCustomData(TApplicationUser applicationUser, ICreateApplicationUserRequest applicationUserRequest) =>
             Task.FromResult(applicationUser);
 
-        public async Task<IApplicationUser> CreateUser(ICreateApplicationUserRequest applicationUserRequest)
+        public async Task<IApplicationUser<TApplicationUserKey>> CreateUser(ICreateApplicationUserRequest applicationUserRequest)
         {
             TApplicationUser user = CreateApplicationUserInstance();
 
@@ -72,22 +72,22 @@ namespace Framework.Authentication.Identity
             return await GetUserAsync(applicationUserRequest.Username);
         }
 
-        public async Task<List<string>> GetRolesAsync(IApplicationUser username)
+        public async Task<List<string>> GetRolesAsync(IApplicationUser<TApplicationUserKey> username)
         {
             return (await UserManager.GetRolesAsync(username as TApplicationUser)).ToList();
         }
 
-        public async Task<IApplicationUser> GetUserAsync(string username)
+        public async Task<IApplicationUser<TApplicationUserKey>> GetUserAsync(string username)
         {
             return await UserManager.FindByNameAsync(username);
         }
 
-        public async Task DeleteUser(IApplicationUser applicationUser)
+        public async Task DeleteUser(IApplicationUser<TApplicationUserKey> applicationUser)
         {
             await UserManager.DeleteAsync(applicationUser as TApplicationUser);
         }
 
-        public async Task ChangePassword(IApplicationUser applicationUser, string currentPassword, string newPassword)
+        public async Task ChangePassword(IApplicationUser<TApplicationUserKey> applicationUser, string currentPassword, string newPassword)
         {
             await UserManager.ChangePasswordAsync(applicationUser as TApplicationUser, currentPassword, newPassword);
         }

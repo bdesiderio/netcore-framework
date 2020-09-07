@@ -10,9 +10,9 @@ using System.Text;
 
 namespace Framework.Authentication.JWT.DependencyInjection
 {
-    public static class FrameworkAuthenticationJwtConfigurationException
+    public static class FrameworkAuthenticationJwtConfigurationExtensions
     {
-        public static IServiceCollection AddFrameworkAuthenticationJwtConfiguration(this IServiceCollection services, string jwtSecret, Action<JwtConfiguration> jwt)
+        public static IServiceCollection AddFrameworkAuthenticationJwtConfiguration<TKey>(this IServiceCollection services, string jwtSecret, Action<JwtConfiguration> jwt)
         {
             services.Configure(jwt);
             services.AddHttpContextAccessor();
@@ -34,8 +34,6 @@ namespace Framework.Authentication.JWT.DependencyInjection
             });
 
             services.AddAuthorization();
-
-            services.AddTransient<ISessionPersistanceService, JWTSessionPersistanceService>();
             return services;
         }
     }

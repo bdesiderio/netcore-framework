@@ -4,9 +4,9 @@ using System.Text;
 
 namespace Framework.Authentication
 {
-    public interface IApplicationUser
+    public interface IApplicationUser<TKey>
     {
-        public object Id { get; }
+        public TKey Id { get; }
         public string UserName { get; set; }
     }
 }
