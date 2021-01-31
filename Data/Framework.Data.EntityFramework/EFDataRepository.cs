@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Framework.Data.EntityFramework
 {
-    public abstract class EFDataRepository<TDbEntity, TDomainEntity, TKey, TDbContext> : IDataRepository<TDomainEntity, TKey>
+    public abstract class EFDataRepository<TDbEntity, TKey, TDbContext> : IDataRepository<TDbEntity, TKey>
         where TDbEntity : class
         where TDbContext : DbContext
     {
@@ -18,7 +18,6 @@ namespace Framework.Data.EntityFramework
             DbContext = dbContext;
         }
 
-        public abstract Func<TDomainEntity, TKey> KeyDomainField { get; }
         public abstract Expression<Func<TDbEntity, TKey>> KeyDbField { get; }
 
         public abstract DbSet<TDbEntity> Entities { get; }
@@ -35,75 +34,60 @@ namespace Framework.Data.EntityFramework
             );
         }
 
-        public virtual async Task<TDomainEntity> GetAsync(TKey id)
+        public virtual async Task<TDbEntity> GetAsync(TKey id)
         {
-            var bdEntity = await GetQueryable().FirstOrDefaultAsync(GetByIdSelector(id));
-            return await MapToDomainEntity(bdEntity);
+            return await GetQueryable().FirstOrDefaultAsync(GetByIdSelector(id));
         }
 
-        public abstract Task<TDbEntity> CreateDbEntityAsync();
-
-        public abstract Task<TDomainEntity> MapToDomainEntity(TDbEntity dbEntity);
-
-        public async Task<IList<TDomainEntity>> MapToDomainEntity(IList<TDbEntity> dbEntities)
-        => (await Task.WhenAll(dbEntities
-            .Select(ev => MapToDomainEntity(ev))))
-            .Where(result => result != null).ToList();
-
-        public abstract Task<TDbEntity> MapFromDomainEntity(TDbEntity dbEntity, TDomainEntity domainEntity);
-
-
         protected virtual IQueryable<TDbEntity> GetQueryable() => Entities;
+
+        protected virtual async Task OnCreating(TDbEntity domainEntity) => await Task.CompletedTask;
 
         protected IQueryable<TDbEntity> Paginate(IQueryable<TDbEntity> tDbEntities, int page, int pageSize)
             => tDbEntities.Skip(pageSize * (page - 1)).Take(pageSize);
 
-        public virtual async Task<IList<TDomainEntity>> GetAllAsync(int page, int pageSize)
+        public virtual async Task<IList<TDbEntity>> GetAllAsync(int page, int pageSize)
         {
-            return await MapToDomainEntity(await Paginate(GetQueryable(), page, pageSize).ToListAsync());
+            return await Paginate(GetQueryable(), page, pageSize).ToListAsync();
         }
 
-        public virtual async Task<IList<TDomainEntity>> GetAllAsync()
+        public virtual async Task<IList<TDbEntity>> GetAllAsync()
         {
-            return await MapToDomainEntity(await GetQueryable().ToListAsync());
+            return await GetQueryable().ToListAsync();
         }
 
-        public virtual async Task<TDomainEntity> GetByIdAsync(TKey id)
+        public virtual async Task<TDbEntity> GetByIdAsync(TKey id)
         {
             var bdEntity = await GetQueryable().FirstOrDefaultAsync(GetByIdSelector(id));
 
             if (bdEntity == null)
             {
-                return default(TDomainEntity);
+                return default(TDbEntity);
             }
 
-            return await MapToDomainEntity(bdEntity);
+            return bdEntity;
         }
 
-        public virtual async Task<TDomainEntity> CreateAsync(TDomainEntity domainEntity)
+        public virtual async Task<TDbEntity> CreateAsync(TDbEntity domainEntity)
         {
-            var dbEntity = await CreateDbEntityAsync();
+            var createdEntity = await Entities.AddAsync(domainEntity);
 
-            dbEntity = await MapFromDomainEntity(dbEntity, domainEntity);
-
-            var createdEntity = await Entities.AddAsync(dbEntity);
+            await OnCreating(domainEntity);
 
             await DbContext.SaveChangesAsync();
 
-            return await MapToDomainEntity(createdEntity.Entity);
+            return createdEntity.Entity;
         }
 
-        public virtual async Task<TDomainEntity> UpdateAsync(TDomainEntity domainEntity)
+        public virtual async Task<TDbEntity> UpdateAsync(TDbEntity domainEntity)
         {
-            var domainEntityId = KeyDomainField(domainEntity);
-            var dbEntity = await GetQueryable().FirstOrDefaultAsync(GetByIdSelector(domainEntityId));
+            var updatedEntity = Entities.Update(domainEntity);
 
-            dbEntity = await MapFromDomainEntity(dbEntity, domainEntity);
-            var updatedEntity = Entities.Update(dbEntity);
+            DbContext.Entry(domainEntity).State = EntityState.Modified;
 
             await DbContext.SaveChangesAsync();
 
-            return await MapToDomainEntity(updatedEntity.Entity);
+            return updatedEntity.Entity;
         }
 
         public virtual async Task DeleteAsync(TKey entityId)
