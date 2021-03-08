@@ -27,7 +27,7 @@ namespace Framework.Authentication.JWT.Services
             _httpContextAccessor = httpContextAccessor;
         }
 
-        public async Task<IUserSession<TApplicationUserKey>> GetSessionPersistance()
+        public async Task<IUserSession<TApplicationUserKey>> GetUserSession()
         {
             var claimsPrincipal = _httpContextAccessor.HttpContext.User;
 
