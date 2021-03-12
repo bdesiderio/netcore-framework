@@ -1,102 +1,193 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Reflection;
 using System.Threading.Tasks;
 
 namespace Framework.Data.EntityFramework
 {
-    public abstract class EFDataRepository<TDbEntity, TKey, TDbContext> : IDataRepository<TDbEntity, TKey>
-        where TDbEntity : class
+    public abstract class EFDataRepository<TEntity, TKey, TDbContext> : IDataRepository<TEntity, TKey>
+        where TEntity : class, new()
         where TDbContext : DbContext
     {
-        protected readonly TDbContext DbContext;
+        private readonly Action<TEntity, TKey> _keySetter;
 
         public EFDataRepository(TDbContext dbContext)
         {
             DbContext = dbContext;
+            _keySetter = KeyProperty.GetSetter();
         }
 
-        public abstract Expression<Func<TDbEntity, TKey>> KeyDbField { get; }
+        public abstract Expression<Func<TEntity, TKey>> KeyProperty { get; }
 
-        public abstract DbSet<TDbEntity> Entities { get; }
+        protected TDbContext DbContext { get; }
 
-        private Expression<Func<TDbEntity, bool>> GetByIdSelector(TKey id)
+        protected virtual IQueryable<TEntity> GetAsyncQueryable() => DbContext.Set<TEntity>();
+
+        public virtual async Task<TEntity> GetAsync(TKey key)
         {
-            var keySelector = KeyDbField;
-            return Expression.Lambda<Func<TDbEntity, bool>>(
-                Expression.Equal(
-                    keySelector.Body,
-                    Expression.Constant(id)
-                ),
-                keySelector.Parameters.Single()
-            );
+            var entity = await GetAsyncQueryable().AsNoTracking().SingleAsync(KeyProperty.GetEqualsPredicateForConstant(key));
+            DbContext.Entry(entity).State = EntityState.Detached;
+
+            return entity;
         }
 
-        public virtual async Task<TDbEntity> GetAsync(TKey id)
+        public virtual async Task<TEntity> TryGetAsync(TKey key)
         {
-            return await GetQueryable().FirstOrDefaultAsync(GetByIdSelector(id));
+            var entity = await DbContext.Set<TEntity>().AsNoTracking().SingleOrDefaultAsync(KeyProperty.GetEqualsPredicateForConstant(key));
+            DbContext.Entry(entity).State = EntityState.Detached;
+
+            return entity;
         }
 
-        protected virtual IQueryable<TDbEntity> GetQueryable() => Entities;
-
-        protected virtual async Task OnCreating(TDbEntity domainEntity) => await Task.CompletedTask;
-
-        protected IQueryable<TDbEntity> Paginate(IQueryable<TDbEntity> tDbEntities, int page, int pageSize)
-            => tDbEntities.Skip(pageSize * (page - 1)).Take(pageSize);
-
-        public virtual async Task<IList<TDbEntity>> GetAllAsync(int page, int pageSize)
+        public virtual async Task<IList<TEntity>> GetAllAsync()
         {
-            return await Paginate(GetQueryable(), page, pageSize).ToListAsync();
+            return await DbContext.Set<TEntity>().AsNoTracking().ToListAsync();
         }
 
-        public virtual async Task<IList<TDbEntity>> GetAllAsync()
+        public virtual async Task AddAsync(TEntity entity)
         {
-            return await GetQueryable().ToListAsync();
+            OnAdding(entity);
+            DbContext.Set<TEntity>().Add(entity);
+            await DbContext.SaveChangesAsync();
+            DbContext.Entry(entity).State = EntityState.Detached;
         }
 
-        public virtual async Task<TDbEntity> GetByIdAsync(TKey id)
+        public virtual async Task UpdateAsync(TEntity entity)
         {
-            var bdEntity = await GetQueryable().FirstOrDefaultAsync(GetByIdSelector(id));
+            DbContext.Set<TEntity>().Attach(entity);
+            OnUpdating(entity);
+            DbContext.Set<TEntity>().Update(entity);
+            await SaveChangesAndDetachAsync(entity);
+        }
 
-            if (bdEntity == null)
+        public virtual async Task UpdateRangeAsync(IEnumerable<TEntity> entities)
+        {
+            //DbContext.Set<TEntity>().AttachRange(entities);
+            foreach (var entity in entities)
             {
-                return default(TDbEntity);
+                OnUpdating(entity);
+            }
+            DbContext.Set<TEntity>().UpdateRange(entities);
+            await SaveChangesAndDetachAsync(entities);
+        }
+
+        public virtual Task RemoveAsync(TKey key)
+        {
+            var entity = new TEntity();
+            _keySetter(entity, key);
+            return RemoveAsync(entity);
+        }
+
+        public virtual async Task RemoveAsync(TEntity entity)
+        {
+            DbContext.Set<TEntity>().Remove(entity);
+            await SaveChangesAndDetachAsync(entity);
+        }
+
+        protected virtual async Task SaveChangesAndDetachAsync(TEntity entity)
+        {
+            try
+            {
+                await DbContext.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                throw UpdateConcurrencyException.From(ex);
+            }
+            finally
+            {
+                DbContext.Entry(entity).State = EntityState.Detached;
+            }
+        }
+
+        protected virtual async Task SaveChangesAndDetachAsync(IEnumerable<TEntity> entities)
+        {
+            try
+            {
+                await DbContext.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                throw UpdateConcurrencyException.From(ex);
+            }
+            finally
+            {
+                foreach (var entity in entities)
+                {
+                    DbContext.Entry(entity).State = EntityState.Detached;
+                }
+            }
+        }
+
+        protected virtual async Task SaveUpdateChangesAsync(TEntity entity)
+        {
+            try
+            {
+                await DbContext.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                throw UpdateConcurrencyException.From(ex);
             }
 
-            return bdEntity;
+            DbContext.Entry(entity).State = EntityState.Detached;
         }
 
-        public virtual async Task<TDbEntity> CreateAsync(TDbEntity domainEntity)
+        protected virtual void OnAdding(TEntity entity) { }
+        protected virtual void OnUpdating(TEntity entity) { }
+        protected virtual void OnUpdating(TEntity entity, EntityEntry<TEntity> entityEntry) { }
+    }
+
+    public static class LinqExtensions
+    {
+        public static Expression<Func<TClass, bool>> GetEqualsPredicateForConstant<TClass, TProperty>(
+            this Expression<Func<TClass, TProperty>> propertyAccessorExpression,
+            TProperty value)
         {
-            var createdEntity = await Entities.AddAsync(domainEntity);
-
-            await OnCreating(domainEntity);
-
-            await DbContext.SaveChangesAsync();
-
-            return createdEntity.Entity;
+            var predicateExpression = Expression.Equal(propertyAccessorExpression.Body, Expression.Constant(value));
+            return Expression.Lambda<Func<TClass, bool>>(predicateExpression, propertyAccessorExpression.Parameters[0]);
         }
 
-        public virtual async Task<TDbEntity> UpdateAsync(TDbEntity domainEntity)
+        public static Action<TClass, TProperty> GetSetter<TClass, TProperty>(
+           this Expression<Func<TClass, TProperty>> propertyAccessorExpression)
         {
-            var updatedEntity = Entities.Update(domainEntity);
-
-            DbContext.Entry(domainEntity).State = EntityState.Modified;
-
-            await DbContext.SaveChangesAsync();
-
-            return updatedEntity.Entity;
+            var propertyInfo = (PropertyInfo)((MemberExpression)propertyAccessorExpression.Body).Member;
+            return (Action<TClass, TProperty>)Delegate.CreateDelegate(typeof(Action<TClass, TProperty>), propertyInfo.GetSetMethod());
         }
+    }
 
-        public virtual async Task DeleteAsync(TKey entityId)
+    public class EFCoreUpdateBuilder<TEntity> : IUpdateBuilder<TEntity> where TEntity : class
+    {
+        private readonly TEntity _entity;
+        private readonly EntityEntry<TEntity> _entityEntry;
+
+        public EFCoreUpdateBuilder(TEntity entity, EntityEntry<TEntity> entityEntry)
         {
-            var dbEntity = await GetQueryable().FirstOrDefaultAsync(GetByIdSelector(entityId));
-
-            Entities.Remove(dbEntity);
-
-            await DbContext.SaveChangesAsync();
+            _entity = entity;
+            _entityEntry = entityEntry;
         }
+
+        public IUpdateBuilder<TEntity> Set<TProperty>(Expression<Func<TEntity, TProperty>> propertyExpression, TProperty value)
+        {
+            propertyExpression.GetSetter()(_entity, value);
+            _entityEntry.Property(propertyExpression).IsModified = true;
+            return this;
+        }
+    }
+
+    public class UpdateConcurrencyException : Exception
+    {
+        public UpdateConcurrencyException() { }
+
+        public UpdateConcurrencyException(string message) : base(message) { }
+
+        public UpdateConcurrencyException(string message, Exception innerException) : base(message, innerException) { }
+
+        public static UpdateConcurrencyException From(Exception ex)
+            => new UpdateConcurrencyException(ex.Message, ex.InnerException);
     }
 }
