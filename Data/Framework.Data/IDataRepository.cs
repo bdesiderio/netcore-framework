@@ -15,6 +15,7 @@ namespace Framework.Data
         Task<IList<TEntity>> GetAllAsync();
         Task UpdateRangeAsync(IEnumerable<TEntity> entities);
         Task RemoveAsync(TEntity entity);
+        Task RemoveRangeAsync(IEnumerable<TEntity> entity);
     }
 
     public interface IUpdateBuilder<TEntity> where TEntity : class

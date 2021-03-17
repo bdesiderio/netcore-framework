@@ -29,23 +29,23 @@ namespace Framework.Data.EntityFramework
 
         public virtual async Task<TEntity> GetAsync(TKey key)
         {
-            var entity = await GetAsyncQueryable().AsNoTracking().SingleAsync(KeyProperty.GetEqualsPredicateForConstant(key));
-            DbContext.Entry(entity).State = EntityState.Detached;
+            var entity = await GetAsyncQueryable().SingleAsync(KeyProperty.GetEqualsPredicateForConstant(key));
+            //DbContext.Entry(entity).State = EntityState.Detached;
 
             return entity;
         }
 
         public virtual async Task<TEntity> TryGetAsync(TKey key)
         {
-            var entity = await DbContext.Set<TEntity>().AsNoTracking().SingleOrDefaultAsync(KeyProperty.GetEqualsPredicateForConstant(key));
-            DbContext.Entry(entity).State = EntityState.Detached;
+            var entity = await DbContext.Set<TEntity>().SingleOrDefaultAsync(KeyProperty.GetEqualsPredicateForConstant(key));
+            //DbContext.Entry(entity).State = EntityState.Detached;
 
             return entity;
         }
 
         public virtual async Task<IList<TEntity>> GetAllAsync()
         {
-            return await DbContext.Set<TEntity>().AsNoTracking().ToListAsync();
+            return await DbContext.Set<TEntity>().ToListAsync();
         }
 
         public virtual async Task AddAsync(TEntity entity)
@@ -86,6 +86,12 @@ namespace Framework.Data.EntityFramework
         {
             DbContext.Set<TEntity>().Remove(entity);
             await SaveChangesAndDetachAsync(entity);
+        }
+
+        public async Task RemoveRangeAsync(IEnumerable<TEntity> entities)
+        {
+            DbContext.Set<TEntity>().RemoveRange(entities);
+            await SaveChangesAndDetachAsync(entities);
         }
 
         protected virtual async Task SaveChangesAndDetachAsync(TEntity entity)
