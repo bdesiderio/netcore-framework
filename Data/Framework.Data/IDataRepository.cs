@@ -13,6 +13,7 @@ namespace Framework.Data
         Task UpdateAsync(TEntity entity);
         Task RemoveAsync(TKey key);
         Task<IList<TEntity>> GetAllAsync();
+        Task<Paginable<TEntity>> GetAllAsync(int currentPage, int pageSize);
         Task UpdateRangeAsync(IEnumerable<TEntity> entities);
         Task RemoveAsync(TEntity entity);
         Task RemoveRangeAsync(IEnumerable<TEntity> entity);

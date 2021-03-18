@@ -25,6 +25,7 @@ namespace Framework.Data.EntityFramework
 
         protected TDbContext DbContext { get; }
 
+        protected virtual IQueryable<TEntity> GetAllAsyncQueryable() => DbContext.Set<TEntity>();
         protected virtual IQueryable<TEntity> GetAsyncQueryable() => DbContext.Set<TEntity>();
 
         public virtual async Task<TEntity> GetAsync(TKey key)
@@ -43,9 +44,23 @@ namespace Framework.Data.EntityFramework
             return entity;
         }
 
+        protected async Task<Paginable<TEntity>> GetAsPaginable(IQueryable<TEntity> entities, int currentPage, int pageSize)
+        {
+            return
+                new Paginable<TEntity>(currentPage, await entities.CountAsync(), pageSize,
+                await entities.Skip((currentPage - 1) * pageSize).Take(pageSize).ToListAsync());
+        }
+
         public virtual async Task<IList<TEntity>> GetAllAsync()
         {
-            return await DbContext.Set<TEntity>().ToListAsync();
+            return await GetAllAsyncQueryable().ToListAsync();
+        }
+
+        public async Task<Paginable<TEntity>> GetAllAsync(int currentPage, int pageSize)
+        {
+            return
+                new Paginable<TEntity>(currentPage, await GetAllAsyncQueryable().CountAsync(), pageSize,
+                await GetAllAsyncQueryable().Skip((currentPage - 1) * pageSize).Take(pageSize).ToListAsync());
         }
 
         public virtual async Task AddAsync(TEntity entity)
@@ -146,6 +161,8 @@ namespace Framework.Data.EntityFramework
         protected virtual void OnAdding(TEntity entity) { }
         protected virtual void OnUpdating(TEntity entity) { }
         protected virtual void OnUpdating(TEntity entity, EntityEntry<TEntity> entityEntry) { }
+
+
     }
 
     public static class LinqExtensions
