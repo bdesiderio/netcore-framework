@@ -59,7 +59,7 @@ namespace Framework.Data.MongoDB
             return (int)await Collection.EstimatedDocumentCountAsync();
         }
 
-        public async Task<TEntity> GetByIdAsync(TKey key)
+        public async Task<TEntity> GetAsync(TKey key)
         {
             return await (await Collection.FindAsync(Builders<TEntity>.Filter.Eq(KeyField, key))).FirstAsync();
         }
@@ -74,17 +74,18 @@ namespace Framework.Data.MongoDB
             return await Collection.AsQueryable().ToListAsync();
         }
 
-        public async Task<IList<TEntity>> GetAllAsync(int page, int pageSize)
+        public async Task<Paginable<TEntity>> GetAllAsync(int currentPage, int pageSize)
         {
-            return await Collection.AsQueryable().Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+            return
+                new Paginable<TEntity>(currentPage, await Collection.AsQueryable().CountAsync(), pageSize,
+                await Collection.AsQueryable().Skip((currentPage - 1) * pageSize).Take(pageSize).ToListAsync());
         }
 
-        public async Task<TEntity> CreateAsync(TEntity entity)
+        public async Task AddAsync(TEntity entity)
         {
             await OnAddingAsync(entity);
             await Collection.InsertOneAsync(entity);
             await OnAddedAsync(entity);
-            return entity;
         }
 
         public async Task<IEnumerable<TEntity>> AddManyAsync(IEnumerable<TEntity> entities)
@@ -103,7 +104,7 @@ namespace Framework.Data.MongoDB
             return entity;
         }
 
-        public async Task DeleteAsync(TKey key)
+        public async Task RemoveAsync(TKey key)
         {
             await OnRemovingAsync(key);
             await Collection.DeleteOneAsync(Builders<TEntity>.Filter.Eq(KeyField, key));
@@ -132,5 +133,31 @@ namespace Framework.Data.MongoDB
         protected virtual Task OnRemovingAsync(TKey key) => Task.CompletedTask;
         protected virtual Task OnRemovedAsync(TKey key) => Task.CompletedTask;
         protected virtual Task OnInitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        Task IDataRepository<TEntity, TKey>.UpdateAsync(TEntity entity)
+        {
+            throw new NotImplementedException();
+        }
+
+
+        public async Task UpdateRangeAsync(IEnumerable<TEntity> entities)
+        {
+            foreach (var entity in entities)
+            {
+                await OnUpdatingAsync(entity);
+                await UpdateAsync(entity);
+                await OnUpdatedAsync(entity);
+            }
+        }
+
+        public async Task RemoveAsync(TEntity entity)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task RemoveRangeAsync(IEnumerable<TEntity> entity)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
