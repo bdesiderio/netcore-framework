@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using Framework.Authentication.Exceptions;
+using Framework.Authentication.Exceptions.ChangePasswordExceptions;
+using Microsoft.AspNetCore.Identity;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -89,7 +91,15 @@ namespace Framework.Authentication.Identity
 
         public async Task ChangePassword(IApplicationUser<TApplicationUserKey> applicationUser, string currentPassword, string newPassword)
         {
-            await UserManager.ChangePasswordAsync(applicationUser as TApplicationUser, currentPassword, newPassword);
+            var result = await UserManager.ChangePasswordAsync(applicationUser as TApplicationUser, currentPassword, newPassword);
+
+            if (!result.Succeeded)
+            {
+                if (result.Errors.Any(x => x.Code == "PasswordRequiresDigit"))
+                    throw new PasswordLowSecurityException(String.Join(Environment.NewLine, result.Errors.Select(x => x.Description)));
+                if (result.Errors.Any(x => x.Code == "PasswordMismatch"))
+                    throw new PasswordMisMatchException(String.Join(Environment.NewLine, result.Errors.Select(x => x.Description)));
+            }
         }
     }
 }
