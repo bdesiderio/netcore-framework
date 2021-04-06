@@ -96,19 +96,11 @@ namespace Framework.Data.MongoDB
             return entities;
         }
 
-        public async Task<TEntity> UpdateAsync(TEntity entity)
-        {
-            await OnUpdatingAsync(entity);
-            await Collection.ReplaceOneAsync(Builders<TEntity>.Filter.Eq(KeyField, _getKeyValue(entity)), entity);
-            await OnUpdatedAsync(entity);
-            return entity;
-        }
-
         public async Task RemoveAsync(TKey key)
         {
-            await OnRemovingAsync(key);
+            //await OnRemovingAsync(key);
             await Collection.DeleteOneAsync(Builders<TEntity>.Filter.Eq(KeyField, key));
-            await OnRemovedAsync(key);
+            //await OnRemovedAsync(key);
         }
 
         protected IMongoCollection<TCollectionEntity> GetCollection<TCollectionEntity>(string collectionName = null)
@@ -130,13 +122,15 @@ namespace Framework.Data.MongoDB
         protected virtual Task OnAddedAsync(IEnumerable<TEntity> entities) => Task.CompletedTask;
         protected virtual Task OnUpdatingAsync(TEntity entity) => Task.CompletedTask;
         protected virtual Task OnUpdatedAsync(TEntity entity) => Task.CompletedTask;
-        protected virtual Task OnRemovingAsync(TKey key) => Task.CompletedTask;
-        protected virtual Task OnRemovedAsync(TKey key) => Task.CompletedTask;
+        protected virtual Task OnRemovingAsync(TEntity key) => Task.CompletedTask;
+        protected virtual Task OnRemovedAsync(TEntity key) => Task.CompletedTask;
         protected virtual Task OnInitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
-        Task IDataRepository<TEntity, TKey>.UpdateAsync(TEntity entity)
+        public async Task UpdateAsync(TEntity entity)
         {
-            throw new NotImplementedException();
+            await OnUpdatingAsync(entity);
+            await Collection.ReplaceOneAsync(Builders<TEntity>.Filter.Eq(KeyField, _getKeyValue(entity)), entity);
+            await OnUpdatedAsync(entity);
         }
 
 
@@ -152,7 +146,9 @@ namespace Framework.Data.MongoDB
 
         public async Task RemoveAsync(TEntity entity)
         {
-            throw new NotImplementedException();
+            await OnRemovingAsync(entity);
+            await Collection.DeleteOneAsync(Builders<TEntity>.Filter.Eq(KeyField, _getKeyValue(entity)));
+            await OnRemovedAsync(entity);
         }
 
         public Task RemoveRangeAsync(IEnumerable<TEntity> entity)
