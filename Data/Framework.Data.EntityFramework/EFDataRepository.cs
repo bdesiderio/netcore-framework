@@ -44,7 +44,7 @@ namespace Framework.Data.EntityFramework
             return entity;
         }
 
-        protected async Task<Paginable<TEntity>> GetAsPaginable(IQueryable<TEntity> entities, int currentPage, int pageSize)
+        protected async Task<Paginable<TEntity>> GetAsPaginableAsync(IQueryable<TEntity> entities, int currentPage, int pageSize)
         {
             return
                 new Paginable<TEntity>(currentPage, await entities.CountAsync(), pageSize,
