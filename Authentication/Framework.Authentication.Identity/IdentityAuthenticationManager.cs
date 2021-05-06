@@ -99,6 +99,7 @@ namespace Framework.Authentication.Identity
                     throw new PasswordLowSecurityException(String.Join(Environment.NewLine, result.Errors.Select(x => x.Description)));
                 if (result.Errors.Any(x => x.Code == "PasswordMismatch"))
                     throw new PasswordMisMatchException(String.Join(Environment.NewLine, result.Errors.Select(x => x.Description)));
+                throw new ChangePasswordException(String.Join(Environment.NewLine, result.Errors.Select(x => x.Description)));
             }
         }
     }
