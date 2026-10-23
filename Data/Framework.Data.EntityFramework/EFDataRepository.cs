@@ -71,6 +71,14 @@ namespace Framework.Data.EntityFramework
             DbContext.Entry(entity).State = EntityState.Detached;
         }
 
+        public virtual async Task AddRangeAsync(IEnumerable<TEntity> entities)
+        {
+            foreach (var entity in entities)
+                OnAdding(entity);
+            DbContext.Set<TEntity>().AddRange(entities);
+            await SaveChangesAndDetachAsync(entities);
+        }
+
         public virtual async Task UpdateAsync(TEntity entity)
         {
             DbContext.Set<TEntity>().Attach(entity);

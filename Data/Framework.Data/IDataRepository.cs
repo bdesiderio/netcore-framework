@@ -10,6 +10,7 @@ namespace Framework.Data
         Task<TEntity> GetAsync(TKey key);
         Task<TEntity> TryGetAsync(TKey key);
         Task AddAsync(TEntity entity);
+        Task AddRangeAsync(IEnumerable<TEntity> entities);
         Task UpdateAsync(TEntity entity);
         Task RemoveAsync(TKey key);
         Task<IList<TEntity>> GetAllAsync();
